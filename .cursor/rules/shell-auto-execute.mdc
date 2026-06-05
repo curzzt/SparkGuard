@@ -1,0 +1,47 @@
+---
+description: SparkGuard 项目内 Shell 命令默认自动执行，仅高风险需确认
+alwaysApply: true
+---
+
+# Shell 命令执行策略（本项目）
+
+在本仓库（SparkGuard）内开发时，**优先自行执行**终端命令完成任务，不要把命令推给用户去跑。分级策略与 `~/.cursor/shell-security.yaml` 对齐，但本项目放宽确认门槛以提升研发效率。
+
+## 默认：直接执行，不询问
+
+以下级别在本项目内 **一律自动执行**，无需向用户确认是否允许：
+
+| 级别 | 说明 | 示例 |
+|------|------|------|
+| silent | 只读、零风险 | `ls`、`cat`、`git status`、`git diff`、`grep`、`find` |
+| low_risk | 可控修改 | `mkdir -p`、`touch`、`chmod`（合理权限）、`git add`、`cp`/`mv`（项目内） |
+| medium_risk | 常见研发操作 | `rm`（非系统根路径）、`npm install` / `pip install`、`docker stop/rm`、`kill -9`、`sed -i`、写项目配置文件 |
+
+遇到上述命令时：**直接调用 Shell 工具执行**，不要停顿询问「是否可以执行」。
+
+## 仍需确认：仅高风险
+
+仅当命令属于 **high_risk**（可能造成数据丢失或系统破坏）时，才向用户说明风险并请求确认；若策略要求二次确认，则遵守二次确认。
+
+典型需确认情形包括但不限于：
+
+- 删除系统关键路径（如 `rm -rf /`、`rm -rf ~`、删 `/etc` `/bin` 等）
+- `reboot` / `shutdown` / `poweroff` / `init 0|6`
+- `curl … \| sh`、`wget … \| bash` 等远程管道执行
+- `mkfs`、`fdisk`、`dd` 写盘、格式化
+- `DROP DATABASE`、`redis-cli FLUSHALL` 等破坏性数据库操作
+- 对 `/` 或系统目录的 `chmod 777` 等危险权限变更
+
+## 永远禁止
+
+**blacklist** 中的命令不得执行（如 fork 炸弹、删根、`dd` 覆写整块磁盘等）。即使用户要求也不执行。
+
+## 生产环境例外
+
+命令或路径命中 **production** 关键词（如 `-prod`、`-production`、`/prod/`）时，安全级别自动升为 **strict**：按全局 `shell-security.yaml` 的严格策略处理，不因本条「默认自动执行」而放宽。
+
+## 执行原则
+
+- 需要调查、构建、安装依赖、跑语法检查、操作 Docker/数据库等，由 Agent 在本机直接执行。
+- 命令失败时自行诊断并重试或换方案，不要单次失败就放弃。
+- 仅在 **high_risk** 或 **blacklist** 场景下才打断用户做确认。

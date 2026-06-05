@@ -1,0 +1,56 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: sparkguard
+      POSTGRES_PASSWORD: sparkguard
+      POSTGRES_DB: sparkguard
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sparkguard -d sparkguard"]
+      interval: 3s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+    ports:
+      - "8800:8000"
+    environment:
+      APP_ENV: development
+      JWT_SECRET: dev-sparkguard-jwt-secret-change-me
+      JWT_EXPIRE_HOURS: 24
+      FERNET_KEY: ${FERNET_KEY:-8MCU8ABdan035Tp7K4mVj0janbZUhyGJ2Z-BnpPtvLk=}
+      DATABASE_URL: postgresql+asyncpg://sparkguard:sparkguard@postgres:5432/sparkguard
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      FRONTEND_URL: http://localhost:5573
+      PLAYWRIGHT_HEADLESS: "true"
+      RATE_LIMIT_ENABLED: "true"
+      DEV_BYPASS_AUTH: "true"
+    volumes:
+      - ./backend/app:/app/app
+      - ./backend/alembic:/app/alembic
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "5573:5573"
+    environment:
+      VITE_API_PROXY_TARGET: http://backend:8000
+      VITE_DEV_BYPASS_AUTH: "true"
+    volumes:
+      - ./frontend/src:/app/src
+      - ./frontend/index.html:/app/index.html
+      - ./frontend/vite.config.ts:/app/vite.config.ts
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:
