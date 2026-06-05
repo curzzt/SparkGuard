@@ -26,6 +26,12 @@ export default function AccountStatusBlock({ userPhone, account, onChanged }: Ac
     }
   }, []);
 
+  const applyQrcodeImage = useCallback((base64: string | null | undefined) => {
+    if (base64) {
+      setQrImage(`data:image/png;base64,${base64}`);
+    }
+  }, []);
+
   const handlePoll = useCallback(
     async (sid: string) => {
       try {
@@ -50,12 +56,6 @@ export default function AccountStatusBlock({ userPhone, account, onChanged }: Ac
     },
     [applyQrcodeImage, onChanged, stopPoll]
   );
-
-  const applyQrcodeImage = useCallback((base64: string | null | undefined) => {
-    if (base64) {
-      setQrImage(`data:image/png;base64,${base64}`);
-    }
-  }, []);
 
   const startQrcodeFlow = useCallback(async () => {
     stopPoll();

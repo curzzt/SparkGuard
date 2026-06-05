@@ -14,6 +14,7 @@ from app.integrations.douyin.web_browser import (
     poll_qr_login_sync,
     send_private_message_sync,
     start_qr_login_sync,
+    validate_qr_image_base64,
     validate_session_sync,
 )
 from app.models.douyin_account import DouyinAccount
@@ -118,20 +119,32 @@ class DouyinSessionService:
         self.db.add(row)
         await self.db.flush()
 
-        if not result.qrcode_base64 or qr_len < 3000:
+        if not result.qrcode_base64:
             logger.error(
-                "qrcode_start invalid image user_id=%s session_id=%s qrcode_len=%s",
+                "qrcode_start empty image user_id=%s session_id=%s",
                 user_id,
                 session_id,
+            )
+            await self._finish_session(session_id, row, "cancelled")
+            raise AppError(3003, 502, "未能识别登录二维码，请稍后重试")
+
+        ok, reason = validate_qr_image_base64(result.qrcode_base64)
+        if not ok:
+            logger.error(
+                "qrcode_start invalid image user_id=%s session_id=%s reason=%s qrcode_len=%s",
+                user_id,
+                session_id,
+                reason,
                 qr_len,
             )
             await self._finish_session(session_id, row, "cancelled")
             raise AppError(3003, 502, "未能识别登录二维码，请稍后重试")
 
         logger.info(
-            "qrcode_start ok user_id=%s session_id=%s qrcode_len=%s",
+            "qrcode_start ok user_id=%s session_id=%s png=%s qrcode_len=%s",
             user_id,
             session_id,
+            reason,
             qr_len,
         )
         return {

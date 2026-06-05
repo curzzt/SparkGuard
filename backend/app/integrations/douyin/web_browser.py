@@ -111,97 +111,131 @@ def _extract_profile(page: Page) -> dict:
 
 
 def _login_panel(page: Page):
-    panel = page.locator('[id^="login-full-panel"]')
-    if panel.count():
-        return panel.first
+    loc = page.locator('[id^="login-full-panel"]')
+    if loc.count():
+        return loc.first
     return page.locator("body")
 
 
-def _open_login_qrcode_panel(page: Page) -> None:
-    panel = _login_panel(page)
-    try:
-        if not panel.is_visible(timeout=1500):
-            for text in ("登录",):
-                btn = page.get_by_text(text, exact=False).first
-                if btn.is_visible(timeout=2000):
-                    btn.click(force=True)
-                    page.wait_for_timeout(1500)
-                    logger.info("douyin_qr: clicked %s to open login panel", text)
-                    break
-    except Exception as exc:
-        logger.warning("douyin_qr: open login panel failed: %s", exc)
+def _wait_login_panel(page: Page) -> object:
+    for attempt in range(30):
+        loc = page.locator('[id^="login-full-panel"]')
+        if loc.count():
+            logger.info("douyin_qr: login panel ready attempt=%s", attempt)
+            return loc.first
+        if attempt in (0, 3, 6):
+            for sel in (
+                'header button:has-text("登录")',
+                '[data-e2e="login-button"]',
+                'header span:has-text("登录")',
+            ):
+                try:
+                    btn = page.locator(sel).first
+                    if btn.is_visible(timeout=1000):
+                        btn.click(force=True)
+                        logger.info("douyin_qr: clicked header login via %s", sel)
+                        break
+                except Exception:
+                    continue
+        page.wait_for_timeout(500)
+    raise RuntimeError("登录弹窗未加载，请稍后重试")
 
+
+def _open_login_qrcode_panel(page: Page) -> None:
+    panel = _wait_login_panel(page)
     for text in ("扫码登录", "扫码"):
         try:
-            tab = page.get_by_text(text, exact=False).first
-            if tab.is_visible(timeout=2500):
-                tab.click(force=True)
-                page.wait_for_timeout(2000)
-                logger.info("douyin_qr: switched login tab to %s", text)
-                return
+            tab = panel.get_by_text(text, exact=False).first
+            tab.click(force=True, timeout=5000)
+            page.wait_for_timeout(2000)
+            logger.info("douyin_qr: switched login tab to %s", text)
+            return
         except Exception as exc:
             logger.warning("douyin_qr: switch tab %s failed: %s", text, exc)
+    page.get_by_text("扫码登录", exact=False).first.click(force=True, timeout=5000)
+    page.wait_for_timeout(2000)
+    logger.info("douyin_qr: switched login tab via page fallback")
 
 
-def _is_square_qr_box(box: dict) -> bool:
+def _qr_box_score(box: dict) -> float | None:
     w = box.get("width") or 0
     h = box.get("height") or 0
-    if w < 120 or h < 120:
-        return False
+    if w < 140 or h < 140 or w > 360 or h > 360:
+        return None
     ratio = w / h if h else 0
-    return 0.75 <= ratio <= 1.33
+    if ratio < 0.85 or ratio > 1.15:
+        return None
+    area = w * h
+    square_penalty = abs(w - h)
+    return area - square_penalty * 20
+
+
+def _find_qr_element(page: Page):
+    panel = _login_panel(page)
+    scopes = [panel]
+    if page.locator('[class*="login"]').count():
+        scopes.append(page.locator('[class*="login"]').first)
+    best = None
+    best_meta = None
+    for attempt in range(16):
+        for scope in scopes:
+            for sel in ("img", "canvas"):
+                loc = scope.locator(sel)
+                for i in range(loc.count()):
+                    el = loc.nth(i)
+                    try:
+                        box = el.bounding_box()
+                        if not box:
+                            continue
+                        score = _qr_box_score(box)
+                        if score is None:
+                            continue
+                        meta = {"selector": sel, "index": i, "box": box, "score": score, "attempt": attempt}
+                        if best is None or score > best_meta["score"]:
+                            best = el
+                            best_meta = meta
+                    except Exception:
+                        continue
+        if best is not None:
+            return best, best_meta
+        page.wait_for_timeout(500)
+    return None, None
+
+
+def validate_qr_image_base64(payload: str) -> tuple[bool, str]:
+    try:
+        raw = base64.b64decode(payload)
+    except Exception:
+        return False, "invalid_base64"
+    if len(raw) < 3000:
+        return False, f"too_small_bytes={len(raw)}"
+    if raw[:8] != b"\x89PNG\r\n\x1a\n":
+        return False, "not_png"
+    w, h = int.from_bytes(raw[16:20], "big"), int.from_bytes(raw[20:24], "big")
+    if w < 140 or h < 140 or w > 360 or h > 360:
+        return False, f"bad_png_size={w}x{h}"
+    ratio = w / h if h else 0
+    if ratio < 0.85 or ratio > 1.15:
+        return False, f"bad_png_ratio={ratio:.2f}"
+    return True, f"{w}x{h}"
 
 
 def _capture_qrcode_image(page: Page) -> tuple[str, dict]:
     _open_login_qrcode_panel(page)
-    scope = _login_panel(page)
-    element_selectors = (
-        'img[alt*="二维码"]',
-        'img[src*="qrcode"]',
-        '[class*="qrcode"] img',
-        "canvas",
-        "img",
-    )
-    candidates: list[tuple[float, object, str, int, dict]] = []
-    for sel in element_selectors:
-        loc = scope.locator(sel)
-        count = loc.count()
-        for i in range(count):
-            el = loc.nth(i)
-            try:
-                if not el.is_visible(timeout=800):
-                    continue
-                box = el.bounding_box()
-                if not box or not _is_square_qr_box(box):
-                    continue
-                area = box["width"] * box["height"]
-                square_penalty = abs(box["width"] - box["height"])
-                score = area - square_penalty * 10
-                candidates.append((score, el, sel, i, box))
-            except Exception:
-                continue
+    el, meta = _find_qr_element(page)
+    if not el:
+        logger.error("douyin_qr: qr element not found after waiting")
+        raise RuntimeError("未找到登录二维码，请稍后重试")
 
-    if candidates:
-        candidates.sort(key=lambda item: item[0], reverse=True)
-        score, el, sel, index, box = candidates[0]
-        data = el.screenshot()
-        meta = {
-            "selector": sel,
-            "index": index,
-            "box": box,
-            "bytes": len(data),
-            "score": score,
-        }
-        logger.info("douyin_qr: captured element %s", meta)
-        return base64.b64encode(data).decode(), meta
-
-    logger.warning("douyin_qr: no square qr element, fallback to login panel screenshot")
-    try:
-        data = scope.screenshot()
-        return base64.b64encode(data).decode(), {"fallback": "login_panel"}
-    except Exception:
-        data = page.screenshot(full_page=False)
-        return base64.b64encode(data).decode(), {"fallback": "full_page"}
+    data = el.screenshot()
+    meta = {**meta, "bytes": len(data)}
+    logger.info("douyin_qr: captured element %s", meta)
+    encoded = base64.b64encode(data).decode()
+    ok, reason = validate_qr_image_base64(encoded)
+    if not ok:
+        logger.error("douyin_qr: invalid qr image %s meta=%s", reason, meta)
+        raise RuntimeError("登录二维码无效，请稍后重试")
+    return encoded, {**meta, "png": reason}
 
 
 def _click_im_entry(page: Page) -> bool:
@@ -268,16 +302,7 @@ def start_qr_login_sync() -> QrStartResult:
         )
 
     qrcode_b64, meta = _capture_qrcode_image(page)
-    if not qrcode_b64:
-        logger.error("douyin_qr: empty qrcode capture meta=%s", meta)
-        raise RuntimeError("未能截取登录二维码")
-    try:
-        raw = base64.b64decode(qrcode_b64)
-        if len(raw) < 3000:
-            logger.warning("douyin_qr: suspicious small image bytes=%s meta=%s", len(raw), meta)
-    except Exception as exc:
-        logger.warning("douyin_qr: invalid base64 payload: %s", exc)
-
+    logger.info("douyin_qr: capture ok meta=%s", meta)
     return QrStartResult(
         qrcode_base64=qrcode_b64,
         playwright=playwright,
