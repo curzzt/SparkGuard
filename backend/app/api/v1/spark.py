@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.database import job_session_factory
 from app.core.deps import get_current_user, get_db
 from app.core.errors import AppError, success
 from app.core.rate_limit import limiter
@@ -102,20 +103,26 @@ async def update_settings(
 async def run_now(
     request: Request,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
 ):
-    scheduler_service = SchedulerService(db)
-    if await scheduler_service.is_locked(current_user.id):
-        raise AppError(4001, 409)
-    acquired = await scheduler_service.try_acquire_user_lock(current_user.id)
-    if not acquired:
-        raise AppError(4001, 409)
-    try:
-        await execute_spark_for_user(db, current_user.id, trigger="manual")
-        settings_service = SparkSettingsService(db)
-        await settings_service.mark_scheduled_today(current_user.id)
-    finally:
-        await scheduler_service.release_user_lock(current_user.id)
+    async with job_session_factory() as job_db:
+        scheduler_service = SchedulerService(job_db)
+        if await scheduler_service.is_locked(current_user.id):
+            raise AppError(4001, 409)
+        acquired = await scheduler_service.try_acquire_user_lock(current_user.id)
+        if not acquired:
+            raise AppError(4001, 409)
+        await job_db.commit()
+        try:
+            await execute_spark_for_user(job_db, current_user.id, trigger="manual")
+            await SparkSettingsService(job_db).mark_scheduled_today(current_user.id)
+            await job_db.commit()
+        except Exception:
+            await job_db.rollback()
+            raise
+        finally:
+            async with job_session_factory() as release_db:
+                await SchedulerService(release_db).release_user_lock(current_user.id)
+                await release_db.commit()
     return success({"job_status": "running", "message": "任务已触发"})
 
 

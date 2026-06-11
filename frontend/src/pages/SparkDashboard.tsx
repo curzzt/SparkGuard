@@ -1,20 +1,17 @@
-import { useEffect } from "react";
-import { Layout } from "antd";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import AppHeader from "@/components/layout/AppHeader";
-import AccountStatusBlock from "@/components/spark/AccountStatusBlock";
-import AutoSparkSettingsBlock from "@/components/spark/AutoSparkSettingsBlock";
-import TodayStatusBlock from "@/components/spark/TodayStatusBlock";
-import TargetListBlock from "@/components/spark/TargetListBlock";
+import SparkBackground from "@/components/layout/SparkBackground";
+import AccountStatusModal from "@/components/spark/AccountStatusModal";
+import MissionControl from "@/components/spark/MissionControl";
 import RecordListBlock from "@/components/spark/RecordListBlock";
-import { useAuth } from "@/hooks/useAuth";
+import SettingsPanel from "@/components/spark/SettingsPanel";
+import TargetListBlock from "@/components/spark/TargetListBlock";
 import { useSparkDashboard } from "@/hooks/useSparkDashboard";
-
-const { Content } = Layout;
 
 export default function SparkDashboard() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const [accountOpen, setAccountOpen] = useState(false);
   const {
     accountQuery,
     settingsQuery,
@@ -33,32 +30,59 @@ export default function SparkDashboard() {
   }, []);
 
   return (
-    <Layout style={{ minHeight: "100vh" }}>
-      <AppHeader onLogout={() => navigate("/login")} />
-      <Content className="page-container">
-        <AccountStatusBlock
-          userPhone={user?.phone}
+    <div className="bg-noise relative min-h-screen">
+      <SparkBackground />
+      <div className="relative z-10">
+        <AppHeader
           account={accountQuery.data}
-          onChanged={refreshAll}
+          onAccountClick={() => setAccountOpen(true)}
+          onLogout={() => navigate("/login")}
         />
-        <AutoSparkSettingsBlock
-          settings={settingsQuery.data}
-          loading={settingsQuery.isLoading && !settingsQuery.isError}
-          onSave={(data) => saveSettingsMutation.mutateAsync(data)}
-          onRunNow={() => runNowMutation.mutateAsync()}
-          onSkipToday={() => skipTodayMutation.mutateAsync()}
-          runLoading={runNowMutation.isPending}
-        />
-        <TodayStatusBlock status={todayQuery.data} loading={todayQuery.isLoading && !todayQuery.isError} />
-        <TargetListBlock
-          targets={targetsQuery.data?.items || []}
-          loading={targetsQuery.isLoading && !targetsQuery.isError}
-          accountBound={accountQuery.data?.bound === true}
-          onChanged={refreshAll}
-          onBatchEnable={(ids) => batchEnableMutation.mutateAsync(ids)}
-        />
-        <RecordListBlock records={recordsQuery.data?.items || []} loading={recordsQuery.isLoading && !recordsQuery.isError} />
-      </Content>
-    </Layout>
+        <main className="mx-auto flex w-full max-w-[1200px] flex-col gap-5 px-6 pb-14 pt-6">
+          <div className="rise-in">
+            <MissionControl
+              settings={settingsQuery.data}
+              status={todayQuery.data}
+              loading={
+                (settingsQuery.isLoading && !settingsQuery.isError) || (todayQuery.isLoading && !todayQuery.isError)
+              }
+              onToggleEnabled={(enabled) => saveSettingsMutation.mutateAsync({ enabled })}
+              onRunNow={() => runNowMutation.mutateAsync()}
+              onSkipToday={() => skipTodayMutation.mutateAsync()}
+              runLoading={runNowMutation.isPending}
+            />
+          </div>
+
+          <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-3">
+            <div className="lg:col-span-2">
+              <TargetListBlock
+                targets={targetsQuery.data?.items || []}
+                loading={targetsQuery.isLoading && !targetsQuery.isError}
+                accountBound={accountQuery.data?.bound === true}
+                onChanged={refreshAll}
+                onBatchEnable={(ids) => batchEnableMutation.mutateAsync(ids)}
+              />
+            </div>
+            <SettingsPanel
+              settings={settingsQuery.data}
+              loading={settingsQuery.isLoading && !settingsQuery.isError}
+              onSave={(data) => saveSettingsMutation.mutateAsync(data)}
+            />
+          </div>
+
+          <RecordListBlock
+            records={recordsQuery.data?.items || []}
+            loading={recordsQuery.isLoading && !recordsQuery.isError}
+          />
+        </main>
+      </div>
+
+      <AccountStatusModal
+        open={accountOpen}
+        account={accountQuery.data}
+        onClose={() => setAccountOpen(false)}
+        onChanged={refreshAll}
+      />
+    </div>
   );
 }

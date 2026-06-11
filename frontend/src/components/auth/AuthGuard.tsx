@@ -1,5 +1,5 @@
 import { Navigate, Outlet } from "react-router-dom";
-import { Spin } from "antd";
+import { FullScreenSpinner } from "@/components/ui/Spinner";
 import { useAuth } from "@/hooks/useAuth";
 import { isDevAuthBypassEnabled } from "@/store/authStore";
 
@@ -11,11 +11,7 @@ export default function AuthGuard() {
   }
 
   if (!hasHydrated) {
-    return (
-      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh" }}>
-        <Spin size="large" />
-      </div>
-    );
+    return <FullScreenSpinner />;
   }
 
   if (!accessToken) {
@@ -23,11 +19,7 @@ export default function AuthGuard() {
   }
 
   if (meQuery.isPending && !user) {
-    return (
-      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh" }}>
-        <Spin size="large" />
-      </div>
-    );
+    return <FullScreenSpinner />;
   }
 
   if (meQuery.isError && !user) {

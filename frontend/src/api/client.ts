@@ -4,7 +4,7 @@ import { isDevAuthBypassEnabled, useAuthStore } from "@/store/authStore";
 
 const client = axios.create({
   baseURL: "/api",
-  timeout: 30000,
+  timeout: 5000,
 });
 
 client.interceptors.request.use((config) => {

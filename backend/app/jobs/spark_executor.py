@@ -112,9 +112,9 @@ async def execute_spark_for_user(db: AsyncSession, user_id: int, trigger: str = 
 
 
 async def run_user_spark_job_safe(user_id: int, trigger: str = "scheduler") -> None:
-    from app.core.database import async_session_factory
+    from app.core.database import job_session_factory
 
-    async with async_session_factory() as db:
+    async with job_session_factory() as db:
         scheduler_service = SchedulerService(db)
         acquired = await scheduler_service.try_acquire_user_lock(user_id)
         if not acquired:
@@ -129,7 +129,7 @@ async def run_user_spark_job_safe(user_id: int, trigger: str = "scheduler") -> N
             await db.rollback()
             raise
         finally:
-            async with async_session_factory() as release_db:
+            async with job_session_factory() as release_db:
                 release_scheduler = SchedulerService(release_db)
                 await release_scheduler.release_user_lock(user_id)
                 await release_db.commit()

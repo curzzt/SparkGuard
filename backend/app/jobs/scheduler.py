@@ -5,7 +5,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from sqlalchemy import select
 
 from app.core.config import get_settings
-from app.core.database import async_session_factory
+from app.core.database import job_session_factory
 from app.jobs.spark_executor import run_user_spark_job_safe
 from app.models.spark_settings import SparkSettings
 from app.models.user import User
@@ -20,7 +20,7 @@ async def scan_due_spark_jobs() -> None:
     today = now.date()
     current_time = now.time()
 
-    async with async_session_factory() as db:
+    async with job_session_factory() as db:
         result = await db.execute(
             select(SparkSettings, User.status)
             .join(User, User.id == SparkSettings.user_id)
