@@ -1,18 +1,29 @@
 import { useEffect, useState } from "react";
-import { Button, Card, Form, Input, Tabs, message } from "antd";
+import { Button, Card, Form, Input, Spin, Tabs, message } from "antd";
 import { useNavigate } from "react-router-dom";
 import { login, register } from "@/api/auth";
 import { useAuth } from "@/hooks/useAuth";
+import { isDevAuthBypassEnabled } from "@/store/authStore";
 
 export default function LoginPage() {
   const navigate = useNavigate();
-  const { setAuth } = useAuth();
+  const { setAuth, accessToken, hasHydrated } = useAuth();
   const [loading, setLoading] = useState(false);
   const [tab, setTab] = useState("login");
 
   useEffect(() => {
     document.title = "登录 - 火花续航";
   }, []);
+
+  useEffect(() => {
+    if (isDevAuthBypassEnabled()) {
+      navigate("/", { replace: true });
+      return;
+    }
+    if (hasHydrated && accessToken) {
+      navigate("/", { replace: true });
+    }
+  }, [accessToken, hasHydrated, navigate]);
 
   const handleLogin = async (values: { phone: string; password: string }) => {
     setLoading(true);
@@ -45,6 +56,14 @@ export default function LoginPage() {
       setLoading(false);
     }
   };
+
+  if (!hasHydrated && !isDevAuthBypassEnabled()) {
+    return (
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <Spin size="large" />
+      </div>
+    );
+  }
 
   return (
     <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>

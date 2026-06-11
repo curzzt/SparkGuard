@@ -1,5 +1,5 @@
 import client, { unwrap } from "./client";
-import type { DouyinAccount, QrcodeStartData, QrcodeStatusData } from "@/types/douyin";
+import type { DouyinAccount, DouyinRecentContactsData, QrcodeStartData, QrcodeStatusData } from "@/types/douyin";
 
 export async function startDouyinQrcode() {
   return unwrap<QrcodeStartData>(
@@ -21,6 +21,12 @@ export async function cancelDouyinQrcode(sessionId: string) {
 
 export async function getDouyinAccount() {
   return unwrap<DouyinAccount>(client.get("/douyin/account"));
+}
+
+export async function getDouyinRecentContacts(limit = 10) {
+  return unwrap<DouyinRecentContactsData>(
+    client.get("/douyin/recent-contacts", { params: { limit }, timeout: 120000 })
+  );
 }
 
 export async function unbindDouyin() {

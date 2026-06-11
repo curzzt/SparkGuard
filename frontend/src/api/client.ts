@@ -1,6 +1,6 @@
 import axios from "axios";
 import type { ApiResponse } from "@/types/auth";
-import { useAuthStore } from "@/store/authStore";
+import { isDevAuthBypassEnabled, useAuthStore } from "@/store/authStore";
 
 const client = axios.create({
   baseURL: "/api",
@@ -24,7 +24,7 @@ client.interceptors.response.use(
     return response;
   },
   (error) => {
-    if (error.response?.status === 401) {
+    if (error.response?.status === 401 && !isDevAuthBypassEnabled()) {
       useAuthStore.getState().clearAuth();
       if (window.location.pathname !== "/login") {
         window.location.href = "/login";

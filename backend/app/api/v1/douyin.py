@@ -47,6 +47,18 @@ async def account(current_user: User = Depends(get_current_user), db: AsyncSessi
     return success(data)
 
 
+@router.get("/recent-contacts")
+@limiter.limit("10/minute")
+async def recent_contacts(
+    request: Request,
+    limit: int = Query(10, ge=1, le=10),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    data = await DouyinSessionService(db).list_recent_contacts(current_user.id, limit)
+    return success(data)
+
+
 @router.post("/unbind")
 async def unbind(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     data = await DouyinSessionService(db).unbind(current_user.id)

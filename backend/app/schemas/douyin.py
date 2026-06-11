@@ -29,3 +29,12 @@ class DouyinAccountResponse(BaseModel):
 
 class UnbindResponse(BaseModel):
     success: bool = True
+
+
+class RecentContactItem(BaseModel):
+    display_name: str
+
+
+class RecentContactsResponse(BaseModel):
+    items: list[RecentContactItem]
+    total: int

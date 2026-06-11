@@ -43,20 +43,21 @@ export default function SparkDashboard() {
         />
         <AutoSparkSettingsBlock
           settings={settingsQuery.data}
-          loading={settingsQuery.isLoading}
+          loading={settingsQuery.isLoading && !settingsQuery.isError}
           onSave={(data) => saveSettingsMutation.mutateAsync(data)}
           onRunNow={() => runNowMutation.mutateAsync()}
           onSkipToday={() => skipTodayMutation.mutateAsync()}
           runLoading={runNowMutation.isPending}
         />
-        <TodayStatusBlock status={todayQuery.data} loading={todayQuery.isLoading} />
+        <TodayStatusBlock status={todayQuery.data} loading={todayQuery.isLoading && !todayQuery.isError} />
         <TargetListBlock
           targets={targetsQuery.data?.items || []}
-          loading={targetsQuery.isLoading}
+          loading={targetsQuery.isLoading && !targetsQuery.isError}
+          accountBound={accountQuery.data?.bound === true}
           onChanged={refreshAll}
           onBatchEnable={(ids) => batchEnableMutation.mutateAsync(ids)}
         />
-        <RecordListBlock records={recordsQuery.data?.items || []} loading={recordsQuery.isLoading} />
+        <RecordListBlock records={recordsQuery.data?.items || []} loading={recordsQuery.isLoading && !recordsQuery.isError} />
       </Content>
     </Layout>
   );

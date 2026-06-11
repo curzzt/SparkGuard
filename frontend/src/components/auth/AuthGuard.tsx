@@ -1,26 +1,38 @@
 import { Navigate, Outlet } from "react-router-dom";
 import { Spin } from "antd";
 import { useAuth } from "@/hooks/useAuth";
-
-const DEV_BYPASS = import.meta.env.DEV && import.meta.env.VITE_DEV_BYPASS_AUTH === "true";
+import { isDevAuthBypassEnabled } from "@/store/authStore";
 
 export default function AuthGuard() {
-  const { isAuthenticated, meQuery } = useAuth();
+  const { accessToken, user, hasHydrated, clearAuth, meQuery } = useAuth();
 
-  if (DEV_BYPASS) {
+  if (isDevAuthBypassEnabled()) {
     return <Outlet />;
   }
 
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
-  }
-
-  if (meQuery.isLoading) {
+  if (!hasHydrated) {
     return (
       <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh" }}>
         <Spin size="large" />
       </div>
     );
+  }
+
+  if (!accessToken) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (meQuery.isPending && !user) {
+    return (
+      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh" }}>
+        <Spin size="large" />
+      </div>
+    );
+  }
+
+  if (meQuery.isError && !user) {
+    clearAuth();
+    return <Navigate to="/login" replace />;
   }
 
   return <Outlet />;

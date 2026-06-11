@@ -47,6 +47,36 @@ class SendDmResult:
     screenshot_base64: str | None = None
 
 
+@dataclass
+class RecentContact:
+    display_name: str
+
+
+@dataclass
+class FetchRecentContactsResult:
+    success: bool
+    contacts: list[RecentContact]
+    error_message: str | None = None
+
+
+_SKIP_CONTACT_LABELS = frozenset(
+    {
+        "陌生人消息",
+        "互动消息",
+        "系统通知",
+        "消息",
+        "私信",
+        "搜索",
+        "登录",
+        "扫码登录",
+        "验证码登录",
+        "暂无消息",
+        "加载中",
+        "发送消息",
+    }
+)
+
+
 def _headless() -> bool:
     return get_settings().PLAYWRIGHT_HEADLESS
 
@@ -256,6 +286,93 @@ def _click_im_entry(page: Page) -> bool:
         return False
 
 
+def _normalize_contact_label(text: str) -> str | None:
+    line = (text or "").strip().split("\n")[0].strip()
+    if not line or len(line) > 50:
+        return None
+    if line in _SKIP_CONTACT_LABELS:
+        return None
+    lower = line.lower()
+    if lower.startswith("http") or "@" in line:
+        return None
+    return line
+
+
+def _collect_contact_labels(page: Page, limit: int) -> list[str]:
+    page.wait_for_timeout(2500)
+    names: list[str] = []
+    seen: set[str] = set()
+
+    def add(raw: str | None) -> None:
+        if len(names) >= limit:
+            return
+        label = _normalize_contact_label(raw or "")
+        if not label or label in seen:
+            return
+        seen.add(label)
+        names.append(label)
+
+    try:
+        js_names = page.evaluate(
+            """(limit) => {
+                const skip = new Set([
+                    "陌生人消息", "互动消息", "系统通知", "消息", "私信", "搜索",
+                    "登录", "扫码登录", "验证码登录", "暂无消息", "加载中", "发送消息",
+                ]);
+                const out = [];
+                const seen = new Set();
+                const selectors = [
+                    '[data-e2e*="conversation"]',
+                    '[data-e2e*="chat-item"]',
+                    '[class*="Conversation"]',
+                    '[class*="conversation"]',
+                    'aside [class*="item"]',
+                    '[class*="list"] [class*="item"]',
+                ];
+                for (const sel of selectors) {
+                    for (const el of document.querySelectorAll(sel)) {
+                        const text = (el.innerText || "").trim().split("\\n")[0].trim();
+                        if (!text || text.length > 50 || skip.has(text) || seen.has(text)) continue;
+                        seen.add(text);
+                        out.push(text);
+                        if (out.length >= limit) return out;
+                    }
+                }
+                return out;
+            }""",
+            limit,
+        )
+        if isinstance(js_names, list):
+            for item in js_names:
+                if isinstance(item, str):
+                    add(item)
+    except Exception as exc:
+        logger.warning("collect contacts via evaluate failed: %s", exc)
+
+    if len(names) >= limit:
+        return names[:limit]
+
+    for sel in (
+        '[data-e2e*="conversation"]',
+        '[data-e2e*="chat-item"]',
+        '[class*="ConversationItem"]',
+        '[class*="conversation-item"]',
+        'aside li',
+        '[class*="list"] > div',
+    ):
+        loc = page.locator(sel)
+        count = min(loc.count(), 40)
+        for i in range(count):
+            try:
+                add(loc.nth(i).inner_text())
+            except Exception:
+                continue
+            if len(names) >= limit:
+                return names[:limit]
+
+    return names[:limit]
+
+
 def _send_in_chat(page: Page, message: str) -> None:
     for sel in (
         'div[contenteditable="true"]',
@@ -356,6 +473,49 @@ def validate_session_sync(storage_state_json: str) -> bool:
     except Exception as exc:
         logger.warning("validate_session failed: %s", exc)
         return False
+    finally:
+        close_browser_session(playwright, browser)
+
+
+def fetch_recent_contacts_sync(storage_state_json: str, limit: int = 10) -> FetchRecentContactsResult:
+    try:
+        state = json.loads(storage_state_json)
+    except json.JSONDecodeError:
+        return FetchRecentContactsResult(success=False, contacts=[], error_message="登录态数据无效")
+
+    cap = max(1, min(limit, 10))
+    playwright = sync_playwright().start()
+    browser = None
+    try:
+        browser, context = _new_context(playwright, storage_state=state)
+        page = context.new_page()
+        page.goto(DOUYIN_MESSAGE, wait_until="domcontentloaded", timeout=60000)
+        page.wait_for_timeout(2000)
+
+        if not _is_logged_in(page):
+            return FetchRecentContactsResult(
+                success=False,
+                contacts=[],
+                error_message="登录态已失效，请重新扫码关联抖音号",
+            )
+
+        if page.url.find("/message") < 0 and not _click_im_entry(page):
+            return FetchRecentContactsResult(success=False, contacts=[], error_message="无法打开抖音私信页面")
+
+        labels = _collect_contact_labels(page, cap)
+        if not labels:
+            return FetchRecentContactsResult(
+                success=False,
+                contacts=[],
+                error_message="未能读取最近联系人，请确认私信列表中有会话",
+            )
+        return FetchRecentContactsResult(
+            success=True,
+            contacts=[RecentContact(display_name=n) for n in labels],
+        )
+    except Exception as exc:
+        logger.exception("fetch_recent_contacts failed")
+        return FetchRecentContactsResult(success=False, contacts=[], error_message=str(exc)[:500])
     finally:
         close_browser_session(playwright, browser)
 

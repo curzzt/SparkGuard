@@ -4,10 +4,12 @@ import type { ColumnsType } from "antd/es/table";
 import { batchDisableTargets, createTarget, deleteTarget, updateTarget } from "@/api/spark";
 import type { SparkTarget } from "@/types/spark";
 import TargetFormModal from "./TargetFormModal";
+import RecentContactsImportModal from "./RecentContactsImportModal";
 
 interface TargetListBlockProps {
   targets: SparkTarget[];
   loading?: boolean;
+  accountBound?: boolean;
   onChanged: () => void;
   onBatchEnable: (ids: number[]) => Promise<unknown>;
 }
@@ -19,9 +21,10 @@ const statusColor: Record<string, string> = {
   pending: "default",
 };
 
-export default function TargetListBlock({ targets, loading, onChanged, onBatchEnable }: TargetListBlockProps) {
+export default function TargetListBlock({ targets, loading, accountBound, onChanged, onBatchEnable }: TargetListBlockProps) {
   const [selected, setSelected] = useState<number[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [editing, setEditing] = useState<SparkTarget | null>(null);
 
   const columns: ColumnsType<SparkTarget> = [
@@ -146,6 +149,9 @@ export default function TargetListBlock({ targets, loading, onChanged, onBatchEn
       title="续火花对象列表"
       extra={
         <Space>
+          <Button disabled={!accountBound} onClick={() => setImportOpen(true)}>
+            导入最近好友
+          </Button>
           <Button
             onClick={() => {
               setEditing(null);
@@ -176,6 +182,15 @@ export default function TargetListBlock({ targets, loading, onChanged, onBatchEn
               <div>最近失败原因：{record.last_error || "-"}</div>
             </div>
           ),
+        }}
+      />
+      <RecentContactsImportModal
+        open={importOpen}
+        existingTargets={targets}
+        onCancel={() => setImportOpen(false)}
+        onImported={() => {
+          setImportOpen(false);
+          onChanged();
         }}
       />
       <TargetFormModal

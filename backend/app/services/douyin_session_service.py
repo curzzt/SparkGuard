@@ -11,6 +11,7 @@ from app.core.errors import AppError
 from app.core.security import decrypt_token, encrypt_token
 from app.integrations.douyin.web_browser import (
     close_browser_session,
+    fetch_recent_contacts_sync,
     poll_qr_login_sync,
     send_private_message_sync,
     start_qr_login_sync,
@@ -276,6 +277,26 @@ class DouyinSessionService:
             "success": result.success,
             "error_message": result.error_message,
             "screenshot_base64": result.screenshot_base64,
+        }
+
+    async def list_recent_contacts(self, user_id: int, limit: int = 10) -> dict:
+        account = await self.get_account_entity(user_id)
+        if not account:
+            raise AppError(3001, 400)
+        session_json = await self.ensure_valid_session(account)
+        if not session_json:
+            raise AppError(3002, 401, "抖音登录态已失效，请重新扫码关联")
+        cap = max(1, min(limit, 10))
+        result = await asyncio.to_thread(fetch_recent_contacts_sync, session_json, cap)
+        if not result.success:
+            if result.error_message and "失效" in result.error_message:
+                account.auth_status = "expired"
+                await self.db.flush()
+                raise AppError(3002, 401, result.error_message)
+            raise AppError(3003, 502, result.error_message or "获取最近联系人失败")
+        return {
+            "items": [{"display_name": c.display_name} for c in result.contacts],
+            "total": len(result.contacts),
         }
 
     async def _save_account(self, user_id: int, storage_state: dict, profile: dict) -> DouyinAccount:

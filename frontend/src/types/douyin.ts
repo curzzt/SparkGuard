@@ -24,3 +24,12 @@ export interface QrcodeStatusData {
   message?: string;
   qrcode_image?: string | null;
 }
+
+export interface DouyinRecentContact {
+  display_name: string;
+}
+
+export interface DouyinRecentContactsData {
+  items: DouyinRecentContact[];
+  total: number;
+}

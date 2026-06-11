@@ -14,13 +14,16 @@ import {
 export function useSparkDashboard() {
   const queryClient = useQueryClient();
 
-  const accountQuery = useQuery({ queryKey: ["douyin-account"], queryFn: getDouyinAccount });
-  const settingsQuery = useQuery({ queryKey: ["spark-settings"], queryFn: getSettings });
-  const targetsQuery = useQuery({ queryKey: ["spark-targets"], queryFn: getTargets });
-  const todayQuery = useQuery({ queryKey: ["spark-today"], queryFn: getTodayStatus });
+  const queryOpts = { retry: false, refetchOnWindowFocus: false as const };
+
+  const accountQuery = useQuery({ queryKey: ["douyin-account"], queryFn: getDouyinAccount, ...queryOpts });
+  const settingsQuery = useQuery({ queryKey: ["spark-settings"], queryFn: getSettings, ...queryOpts });
+  const targetsQuery = useQuery({ queryKey: ["spark-targets"], queryFn: getTargets, ...queryOpts });
+  const todayQuery = useQuery({ queryKey: ["spark-today"], queryFn: getTodayStatus, ...queryOpts });
   const recordsQuery = useQuery({
     queryKey: ["spark-records"],
     queryFn: () => getRecords(7, 1, 20),
+    ...queryOpts,
   });
 
   const refreshAll = () => {
