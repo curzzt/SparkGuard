@@ -9,7 +9,7 @@ export async function startDouyinQrcode() {
 
 export async function pollDouyinQrcode(sessionId: string) {
   return unwrap<QrcodeStatusData>(
-    client.get("/douyin/qrcode/status", { params: { session_id: sessionId } })
+    client.get("/douyin/qrcode/status", { params: { session_id: sessionId }, timeout: 30000 })
   );
 }
 

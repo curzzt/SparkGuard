@@ -25,5 +25,7 @@ class SparkRecord(BigIntPKMixin, Base):
     status: Mapped[str] = mapped_column(String(32), nullable=False)
     error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    run_log: Mapped[str | None] = mapped_column(Text, nullable=True)
+    screenshot_base64: Mapped[str | None] = mapped_column(Text, nullable=True)
     agent_decision: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

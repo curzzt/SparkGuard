@@ -12,6 +12,7 @@ from app.api.router import api_router
 from app.core.config import get_settings
 from app.core.errors import AppError, app_error_handler, generic_error_handler
 from app.core.rate_limit import limiter
+from app.integrations.douyin.browser_runtime import shutdown_browser_runtime
 from app.jobs.scheduler import start_scheduler, stop_scheduler
 from app.services.douyin_session_service import shutdown_active_browsers
 
@@ -26,6 +27,7 @@ async def lifespan(_app: FastAPI):
     start_scheduler()
     yield
     await shutdown_active_browsers()
+    await shutdown_browser_runtime()
     stop_scheduler()
 
 

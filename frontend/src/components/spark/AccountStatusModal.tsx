@@ -63,6 +63,9 @@ export default function AccountStatusModal({ open, account, onClose, onChanged }
         } else if (data.status === "expired") {
           stopPoll();
           toast.warning(data.message || "二维码已过期");
+        } else if (data.status === "error") {
+          stopPoll();
+          toast.error(data.message || "二维码获取失败，请重试");
         }
       } catch (e) {
         stopPoll();
@@ -89,13 +92,11 @@ export default function AccountStatusModal({ open, account, onClose, onChanged }
         onClose();
         return;
       }
-      if (!data.qrcode_image) {
-        toast.error("未能获取二维码，请重试");
-        setQrMode(false);
-        return;
-      }
       sessionIdRef.current = data.session_id;
-      setQrImage(`data:image/png;base64,${data.qrcode_image}`);
+      setQrStatus(data.status || "loading");
+      if (data.qrcode_image) {
+        setQrImage(`data:image/png;base64,${data.qrcode_image}`);
+      }
       pollRef.current = setInterval(() => {
         const sid = sessionIdRef.current;
         if (sid) {
@@ -137,11 +138,13 @@ export default function AccountStatusModal({ open, account, onClose, onChanged }
   };
 
   const qrStatusText =
-    qrStatus === "scanned"
-      ? "已扫描，请在手机抖音上点击确认登录"
-      : qrStatus === "expired"
-        ? "二维码已过期，请刷新重试"
-        : "请使用手机抖音扫一扫";
+    qrStatus === "loading"
+      ? "正在生成二维码，请稍候…"
+      : qrStatus === "scanned"
+        ? "已扫描，请在手机抖音上点击确认登录"
+        : qrStatus === "expired"
+          ? "二维码已过期，请刷新重试"
+          : "请使用手机抖音扫一扫";
 
   return (
     <Modal

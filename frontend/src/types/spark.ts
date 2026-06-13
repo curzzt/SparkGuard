@@ -39,4 +39,6 @@ export interface SparkRecord {
   channel: string;
   status: string;
   error_message?: string | null;
+  run_log?: string | null;
+  screenshot_base64?: string | null;
 }

@@ -34,7 +34,9 @@ export async function updateSettings(data: Partial<SparkSettings>) {
 }
 
 export async function runNow() {
-  return unwrap<{ job_status: string; message: string }>(client.post("/spark/run-now"));
+  return unwrap<{ job_status: string; message: string }>(
+    client.post("/spark/run-now", null, { timeout: 300000 })
+  );
 }
 
 export async function skipToday() {

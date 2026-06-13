@@ -15,6 +15,7 @@ class QrcodeStatusResponse(BaseModel):
     nickname: str | None = None
     avatar_url: str | None = None
     message: str | None = None
+    qrcode_image: str | None = None
 
 
 class DouyinAccountResponse(BaseModel):

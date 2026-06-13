@@ -15,7 +15,7 @@ class Settings(BaseSettings):
 
     FRONTEND_URL: str = "http://localhost:5573"
 
-    PLAYWRIGHT_HEADLESS: bool = True
+    PLAYWRIGHT_HEADLESS: bool = False
 
     LLM_API_KEY: str = ""
     LLM_BASE_URL: str = ""

@@ -1,3 +1,5 @@
+import asyncio
+
 from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -5,7 +7,7 @@ from app.core.database import job_session_factory
 from app.core.deps import get_current_user, get_db
 from app.core.errors import AppError, success
 from app.core.rate_limit import limiter
-from app.jobs.spark_executor import execute_spark_for_user
+from app.jobs.spark_executor import run_user_spark_job_safe
 from app.models.user import User
 from app.schemas.spark import (
     BatchIdsRequest,
@@ -19,6 +21,8 @@ from app.services.spark_settings_service import SparkSettingsService
 from app.services.spark_target_service import SparkTargetService
 
 router = APIRouter(prefix="/spark", tags=["spark"])
+
+_run_now_tasks: set[asyncio.Task] = set()
 
 
 @router.get("/targets")
@@ -105,24 +109,11 @@ async def run_now(
     current_user: User = Depends(get_current_user),
 ):
     async with job_session_factory() as job_db:
-        scheduler_service = SchedulerService(job_db)
-        if await scheduler_service.is_locked(current_user.id):
+        if await SchedulerService(job_db).is_locked(current_user.id):
             raise AppError(4001, 409)
-        acquired = await scheduler_service.try_acquire_user_lock(current_user.id)
-        if not acquired:
-            raise AppError(4001, 409)
-        await job_db.commit()
-        try:
-            await execute_spark_for_user(job_db, current_user.id, trigger="manual")
-            await SparkSettingsService(job_db).mark_scheduled_today(current_user.id)
-            await job_db.commit()
-        except Exception:
-            await job_db.rollback()
-            raise
-        finally:
-            async with job_session_factory() as release_db:
-                await SchedulerService(release_db).release_user_lock(current_user.id)
-                await release_db.commit()
+    task = asyncio.create_task(run_user_spark_job_safe(current_user.id, trigger="manual"))
+    _run_now_tasks.add(task)
+    task.add_done_callback(_run_now_tasks.discard)
     return success({"job_status": "running", "message": "任务已触发"})
 
 

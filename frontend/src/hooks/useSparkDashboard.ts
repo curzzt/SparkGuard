@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getDouyinAccount } from "@/api/douyin";
 import {
@@ -34,6 +35,43 @@ export function useSparkDashboard() {
     queryClient.invalidateQueries({ queryKey: ["spark-records"] });
   };
 
+  const pollRef = useRef<number | null>(null);
+
+  const stopPolling = () => {
+    if (pollRef.current !== null) {
+      window.clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  };
+
+  const startPolling = () => {
+    stopPolling();
+    let ticks = 0;
+    pollRef.current = window.setInterval(() => {
+      void (async () => {
+        ticks += 1;
+        queryClient.invalidateQueries({ queryKey: ["spark-records"] });
+        queryClient.invalidateQueries({ queryKey: ["spark-targets"] });
+        try {
+          const status = await queryClient.fetchQuery({
+            queryKey: ["spark-today"],
+            queryFn: getTodayStatus,
+          });
+          if (ticks >= 2 && status.job_status !== "running") {
+            stopPolling();
+          }
+        } catch {
+          /* 轮询期间忽略瞬时错误 */
+        }
+        if (ticks >= 40) {
+          stopPolling();
+        }
+      })();
+    }, 3000);
+  };
+
+  useEffect(() => stopPolling, []);
+
   const saveSettingsMutation = useMutation({
     mutationFn: updateSettings,
     onSuccess: () => {
@@ -43,7 +81,10 @@ export function useSparkDashboard() {
 
   const runNowMutation = useMutation({
     mutationFn: runNow,
-    onSuccess: () => refreshAll(),
+    onSuccess: () => {
+      refreshAll();
+      startPolling();
+    },
   });
 
   const skipTodayMutation = useMutation({

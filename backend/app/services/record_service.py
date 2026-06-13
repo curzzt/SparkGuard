@@ -32,6 +32,8 @@ class RecordService:
         message: str | None = None,
         error_code: str | None = None,
         error_message: str | None = None,
+        run_log: str | None = None,
+        screenshot_base64: str | None = None,
         agent_decision: dict | None = None,
         execute_date: date | None = None,
     ) -> SparkRecord:
@@ -49,6 +51,8 @@ class RecordService:
             status=status,
             error_code=error_code,
             error_message=error_message,
+            run_log=run_log,
+            screenshot_base64=screenshot_base64,
             agent_decision=agent_decision,
         )
         self.db.add(record)
@@ -80,6 +84,8 @@ class RecordService:
                 "channel": r.channel,
                 "status": r.status,
                 "error_message": r.error_message,
+                "run_log": r.run_log,
+                "screenshot_base64": r.screenshot_base64,
             }
             for r in records
         ]
